@@ -6,3 +6,7 @@ include/saucer/config.hpp
 .vs
 .cache
 .vscode
+
+flake.lock
+.envrc
+.direnv

@@ -1,11 +1,14 @@
 blank_issues_enabled: false
+
 contact_links:
   - name: 👀 Showcase
     url: https://github.com/saucer/saucer/discussions/new?category=showcase
     about: Show off something that was built with or for saucer!
+
   - name: 💁 Support (Discord)
     url: https://discord.gg/ndhmQE4225
-    about: Do not use the issue tracker of support questions. Chat with us on Discord instead!
+    about: Do not use the issue tracker for support questions. Chat with us on Discord instead!
+
   - name: 💁 Support (Matrix)
     url: https://matrix.to/#/#saucer:matrix.org
-    about: Do not use the issue tracker of support questions. Chat with us on Matrix instead!
+    about: Do not use the issue tracker for support questions. Chat with us on Matrix instead!
