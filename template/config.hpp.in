@@ -5,4 +5,5 @@
 namespace saucer
 {
     using default_serializer = @DEFAULT_SERIALIZER@;
+    static constexpr auto version = "@PROJECT_VERSION@";
 }
