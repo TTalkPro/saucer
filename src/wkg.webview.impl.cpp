@@ -23,45 +23,54 @@ namespace saucer
     using native = webview::impl::native;
     using event  = webview::event;
 
-    template <auto Func, auto Value>
-    static constexpr auto permission_update = [](gpointer raw, permission::type &result) -> gboolean
+    namespace
     {
-        const auto rtn = Func(raw);
-
-        if (rtn)
+        template <auto Func>
+        constexpr auto is_a(gpointer raw)
         {
-            result |= Value;
-        }
+            return g_type_is_a(G_OBJECT_TYPE(raw), Func());
+        };
 
-        return rtn;
-    };
-
-    static constexpr auto translate_media_permission = [](gpointer raw, permission::type &result) -> gboolean
-    {
-        if (!WEBKIT_IS_USER_MEDIA_PERMISSION_REQUEST(raw))
+        template <auto Func, auto Value>
+        constexpr gboolean permission_update(gpointer raw, permission::type &result)
         {
-            return false;
-        }
+            const auto rtn = is_a<Func>(raw);
 
-        auto *const permission = WEBKIT_USER_MEDIA_PERMISSION_REQUEST(raw);
+            if (rtn)
+            {
+                result |= Value;
+            }
 
-        if (webkit_user_media_permission_is_for_audio_device(permission))
+            return rtn;
+        };
+
+        constexpr gboolean translate_media_permission(gpointer raw, permission::type &result)
         {
-            result |= permission::type::audio_media;
-        }
+            if (!is_a<webkit_user_media_permission_request_get_type>(raw))
+            {
+                return false;
+            }
 
-        if (webkit_user_media_permission_is_for_video_device(permission))
-        {
-            result |= permission::type::video_media;
-        }
+            auto *const permission = WEBKIT_USER_MEDIA_PERMISSION_REQUEST(raw);
 
-        if (webkit_user_media_permission_is_for_display_device(permission))
-        {
-            result |= permission::type::desktop_media;
-        }
+            if (webkit_user_media_permission_is_for_audio_device(permission))
+            {
+                result |= permission::type::audio_media;
+            }
 
-        return true;
-    };
+            if (webkit_user_media_permission_is_for_video_device(permission))
+            {
+                result |= permission::type::video_media;
+            }
+
+            if (webkit_user_media_permission_is_for_display_device(permission))
+            {
+                result |= permission::type::desktop_media;
+            }
+
+            return true;
+        };
+    } // namespace
 
     template <>
     void native::setup<event::permission>(impl *self)
@@ -73,17 +82,19 @@ namespace saucer
             return;
         }
 
-        auto callback = [](WebKitWebView *, WebKitPermissionRequest *raw, impl *self)
+        static const auto callback = [](WebKitWebView *, WebKitPermissionRequest *raw, impl *self)
         {
             using permission::request;
             using enum permission::type;
 
-            static constexpr auto mappings = std::array<gboolean (*)(gpointer, permission::type &), 6>{
-                permission_update<WEBKIT_IS_CLIPBOARD_PERMISSION_REQUEST, clipboard>,
-                permission_update<WEBKIT_IS_DEVICE_INFO_PERMISSION_REQUEST, device_info>,
-                permission_update<WEBKIT_IS_GEOLOCATION_PERMISSION_REQUEST, location>,
-                permission_update<WEBKIT_IS_NOTIFICATION_PERMISSION_REQUEST, notification>,
-                permission_update<WEBKIT_IS_POINTER_LOCK_PERMISSION_REQUEST, mouse_lock>,
+            static constexpr auto mappings = std::array{
+                permission_update<webkit_clipboard_permission_request_get_type, clipboard>,
+                permission_update<webkit_device_info_permission_request_get_type, device_info>,
+                permission_update<webkit_geolocation_permission_request_get_type, location>,
+                permission_update<webkit_notification_permission_request_get_type, notification>,
+#ifdef WEBKIT_TYPE_POINTER_LOCK_PERMISSION_REQUEST
+                permission_update<webkit_pointer_lock_permission_request_get_type, mouse_lock>,
+#endif
                 translate_media_permission,
             };
 
@@ -122,12 +133,12 @@ namespace saucer
             return;
         }
 
-        auto enter_callback = [](WebKitWebView *, impl *self) -> gboolean
+        static const auto enter_callback = [](WebKitWebView *, impl *self) -> gboolean
         {
             return self->events.get<event::fullscreen>().fire(true).find(policy::block).has_value();
         };
 
-        auto leave_callback = [](WebKitWebView *, impl *self) -> gboolean
+        static const auto leave_callback = [](WebKitWebView *, impl *self) -> gboolean
         {
             return self->events.get<event::fullscreen>().fire(false).find(policy::block).has_value();
         };
@@ -163,7 +174,7 @@ namespace saucer
             return;
         }
 
-        auto callback = [](WebKitWebView *, WebKitPolicyDecision *raw, WebKitPolicyDecisionType type, impl *self) -> gboolean
+        static const auto callback = [](WebKitWebView *, WebKitPolicyDecision *raw, WebKitPolicyDecisionType type, impl *self) -> gboolean
         {
             if (type != WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION && type != WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION)
             {
@@ -205,7 +216,7 @@ namespace saucer
             return;
         }
 
-        auto callback = [](WebKitWebView *, WebKitWebResource *, WebKitURIRequest *request, impl *self)
+        static const auto callback = [](WebKitWebView *, WebKitWebResource *, WebKitURIRequest *request, impl *self)
         {
             const auto *raw = webkit_uri_request_get_uri(request);
 
@@ -238,7 +249,7 @@ namespace saucer
             return;
         }
 
-        auto callback = [](void *, GParamSpec *, impl *self)
+        static const auto callback = [](void *, GParamSpec *, impl *self)
         {
             self->events.get<event::favicon>().fire(self->favicon());
         };
@@ -257,7 +268,7 @@ namespace saucer
             return;
         }
 
-        auto callback = [](void *, GParamSpec *, impl *self)
+        static const auto callback = [](void *, GParamSpec *, impl *self)
         {
             self->events.get<event::title>().fire(self->page_title());
         };
