@@ -288,4 +288,73 @@ suite<"webview"> webview_suite = []
 
         expect(not scheme);
     };
+
+    "scheme-reject"_test_async = [](saucer::webview &webview)
+    {
+        static constexpr auto duration = std::chrono::seconds(5);
+
+        // Rejected requests must settle (as an HTTP error status or a network error, depending on the backend) — they used to hang
+        // forever on WebView2 because `reject` built an invalid response.
+        std::string settled;
+        webview.on<message>(
+            [&](auto value)
+            {
+                if (!value.starts_with("scheme-reject:"))
+                {
+                    return saucer::status::unhandled;
+                }
+
+                settled = value;
+                return saucer::status::handled;
+            });
+
+        static constexpr std::string_view page = R"html(
+                <!DOCTYPE html>
+                <html>
+                    <head>
+                        <title>Scheme Reject</title>
+                        <script>
+                            const probe = (path) => fetch("reject://host" + path).then((r) => String(r.status), () => "error");
+                            Promise.all([probe("/missing"), probe("/broken")])
+                                .then(([missing, broken]) => saucer.internal.message("scheme-reject:" + missing + ":" + broken));
+                        </script>
+                    </head>
+                    <body>
+                        Scheme Reject Test
+                    </body>
+                </html>
+            )html";
+
+        webview.handle_scheme("reject",
+                              [](const saucer::scheme::request &req, saucer::scheme::executor executor)
+                              {
+                                  const auto path = req.url().path();
+
+                                  if (path == "/missing")
+                                  {
+                                      return executor.reject(saucer::scheme::error::not_found);
+                                  }
+
+                                  if (path == "/broken")
+                                  {
+                                      return executor.reject(saucer::scheme::error::failed);
+                                  }
+
+                                  return executor.resolve({
+                                      .data   = saucer::stash::view_str(page),
+                                      .mime   = "text/html",
+                                      .status = 200,
+                                  });
+                              });
+
+        webview.set_url(saucer::url::make({.scheme = "reject", .host = "host", .path = "/page.html"}));
+        saucer::tests::wait_for([&] { return not settled.empty(); }, duration);
+
+        expect(not settled.empty());
+#ifdef _WIN32
+        expect(settled == "scheme-reject:404:500") << settled;
+#endif
+
+        webview.remove_scheme("reject");
+    };
 };

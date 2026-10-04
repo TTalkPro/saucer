@@ -5,6 +5,7 @@ int main()
     using namespace boost::ut;
 
     saucer::webview::register_scheme("test");
+    saucer::webview::register_scheme("reject");
 
     auto application = saucer::application::create({
         .id                         = "tests",

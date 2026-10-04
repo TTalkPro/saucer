@@ -459,7 +459,8 @@ namespace saucer
 
         auto reject = [environment, deferral, request = opts.raw](const scheme::error &error)
         {
-            auto status = std::to_underlying(error);
+            // `scheme::error::failed` is -1, which is not a valid HTTP status: report it as a server error instead.
+            auto status = std::to_underlying(error) > 0 ? std::to_underlying(error) : 500;
             std::wstring phrase;
 
             switch (error)
@@ -476,13 +477,19 @@ namespace saucer
                 phrase = L"Unauthorized";
                 break;
             default:
+                phrase = L"Internal Server Error";
                 break;
             }
 
+            // Signature is (content, statusCode, reasonPhrase, headers, response). Passing the phrase as `headers` (and an empty
+            // reason phrase) yields an invalid response, which leaves the request pending forever: neither `fetch` nor `<img>` settle.
             ComPtr<ICoreWebView2WebResourceResponse> result;
-            environment->CreateWebResourceResponse(nullptr, status, L"", phrase.c_str(), &result);
 
-            request->put_Response(result.Get());
+            if (SUCCEEDED(environment->CreateWebResourceResponse(nullptr, status, phrase.c_str(), L"", &result)))
+            {
+                request->put_Response(result.Get());
+            }
+
             deferral->Complete();
         };
 
